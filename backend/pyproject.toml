@@ -32,7 +32,8 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "RUF"]
-ignore = []
+ignore = ["B008"]
+
 
 [tool.ruff.format]
 quote-style = "double"

@@ -29,3 +29,7 @@ yarn-error.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Project plans and specifications
+IMPLEMENTATION_PLAN (2).md
+

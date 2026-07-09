@@ -2,21 +2,21 @@ services:
 
   # ---------- DATASTORES ----------
 
-# postgres:
-  #   image: postgres:16-alpine
-  #   environment:
-  #     POSTGRES_USER: ${POSTGRES_USER:-swarm}
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-swarm}
-  #     POSTGRES_DB: ${POSTGRES_DB:-research_db}
-  #   ports:
-  #     - "5432:5432"          # exposed to host so you can inspect with a DB client; remove in prod
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data   # named volume = survives `docker compose down`
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-swarm}"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 10
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-swarm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-swarm}
+      POSTGRES_DB: ${POSTGRES_DB:-research_db}
+    ports:
+      - "5432:5432"          # exposed to host so you can inspect with a DB client; remove in prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # named volume = survives `docker compose down`
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-swarm}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -42,35 +42,35 @@ services:
       timeout: 5s
       retries: 10
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama     # this is where pulled models live — protect this volume,
-                                       # losing it means re-downloading several GB
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s              # give the server a moment before healthchecks start counting
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama     # this is where pulled models live — protect this volume,
+  #                                      # losing it means re-downloading several GB
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 20s              # give the server a moment before healthchecks start counting
 
   # one-shot container: pulls your 3 fallback models, then exits.
   # depends on ollama being *healthy*, not just started.
-  ollama-pull:
-    image: ollama/ollama:latest
-    depends_on:
-      ollama:
-        condition: service_healthy
-    entrypoint: >
-      sh -c "
-      ollama pull llama3.2:3b --host ollama:11434 &&
-      ollama pull qwen2.5:7b --host ollama:11434 &&
-      ollama pull phi4:14b --host ollama:11434
-      "
-    environment:
-      OLLAMA_HOST: ollama:11434
+  # ollama-pull:
+  #   image: ollama/ollama:latest
+  #   depends_on:
+  #     ollama:
+  #       condition: service_healthy
+  #   entrypoint: >
+  #     sh -c "
+  #     ollama pull llama3.2:3b --host ollama:11434 &&
+  #     ollama pull qwen2.5:7b --host ollama:11434 &&
+  #     ollama pull phi4:14b --host ollama:11434
+  #     "
+  #   environment:
+  #     OLLAMA_HOST: ollama:11434
 
   # ---------- APPLICATION ----------
 
@@ -86,8 +86,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
+      # ollama:
+      #   condition: service_healthy
     volumes:
       - ./backend:/app          # bind mount for hot-reload during dev — remove for prod images
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -114,20 +114,20 @@ services:
       - ./backend:/app
     command: celery -A app.core.celery_app beat --loglevel=info
 
-  frontend:
-    build: ./frontend
-    env_file: .env
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules      # prevents host node_modules (or its absence) from
-                                # shadowing the one installed inside the container
-    command: npm run dev -- --host 0.0.0.0
+  # frontend:
+  #   build: ./frontend
+  #   env_file: .env
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules      # prevents host node_modules (or its absence) from
+  #                               # shadowing the one installed inside the container
+  #   command: npm run dev -- --host 0.0.0.0
 
 volumes:
-#  postgres_data:
+  postgres_data:
   qdrant_data:
-  ollama_data:
+  # ollama_data:
