@@ -1,0 +1,25 @@
+python-dotenv
+
+fastapi
+uvicorn[standard]
+langchain
+langgraph
+
+sqlalchemy
+alembic
+psycopg[binary]          # <- needed now, for Postgres connection
+
+pydantic
+pydantic-settings        # <- BaseSettings moved out of pydantic core in v2
+
+pytest
+httpx                    # <- for testing FastAPI endpoints + calling Groq/OpenRouter
+
+celery
+redis
+qdrant-client
+tavily-python
+duckduckgo-search        # <- your search fallback
+
+python-jose[cryptography]   # <- JWT signing for core/security.py
+passlib[bcrypt]             # <- password hashing
