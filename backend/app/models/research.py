@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -42,8 +43,8 @@ class ResearchReport(Base):
         String(36), ForeignKey("research_jobs.id", ondelete="CASCADE"), nullable=False
     )
     content = Column(Text, nullable=False)
-    sources = Column(JSON, default=list, nullable=False)  # JSONB list of sources
-    critic_scores = Column(JSON, default=dict, nullable=False)  # JSONB dict of scores
+    sources = Column(JSONB, default=list, nullable=False)  # JSONB list of sources (indexable)
+    critic_scores = Column(JSONB, default=dict, nullable=False)  # JSONB dict of scores (indexable)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     job = relationship("ResearchJob", back_populates="reports")
@@ -57,7 +58,7 @@ class FeedbackLog(Base):
         String(36), ForeignKey("research_jobs.id", ondelete="CASCADE"), nullable=False
     )
     agent = Column(String(100), nullable=False)  # e.g., "critic"
-    score = Column(JSON, nullable=False)  # JSONB critic scores
+    score = Column(JSONB, nullable=False)  # JSONB critic scores (indexable)
     feedback = Column(Text, nullable=False)
     loop_iteration = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data   # named volume = survives `docker compose down`
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-swarm}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -37,7 +37,7 @@ services:
     healthcheck:
       # qdrant's image doesn't ship curl/wget by default in older tags — if this fails,
       # swap to a TCP check: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333'"]
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+      test: ["CMD-SHELL", "nc -z localhost 6333 || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -104,15 +104,17 @@ services:
       - ./backend:/app
     command: celery -A app.core.celery_app worker --loglevel=info
 
-  celery_beat:
-    build: ./backend
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./backend:/app
-    command: celery -A app.core.celery_app beat --loglevel=info
+  # celery_beat:
+  #   Restore this service if/when periodic tasks are added to celery_app.conf.beat_schedule
+  #   (e.g. nightly cleanup of expired Redis event keys, re-indexing stale Qdrant chunks).
+  #   build: ./backend
+  #   env_file: .env
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./backend:/app
+  #   command: celery -A app.core.celery_app beat --loglevel=info
 
   # frontend:
   #   build: ./frontend
