@@ -1,84 +1,87 @@
 services:
 
-  # ---------- DATASTORES ----------
+  # ==========================================================
+  # DATABASE
+  # ==========================================================
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
+
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-swarm}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-swarm}
       POSTGRES_DB: ${POSTGRES_DB:-research_db}
+
     ports:
-      - "5432:5432"          # exposed to host so you can inspect with a DB client; remove in prod
+      - "5432:5432"
+
     volumes:
-      - postgres_data:/var/lib/postgresql/data   # named volume = survives `docker compose down`
+      - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # ==========================================================
+  # REDIS
+  # ==========================================================
+
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
+
     ports:
       - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # ==========================================================
+  # QDRANT
+  # ==========================================================
+
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.15.3
+    restart: unless-stopped
+
     ports:
       - "6333:6333"
+      - "6334:6334"
+
     volumes:
       - qdrant_data:/qdrant/storage
+
     healthcheck:
-      # qdrant's image doesn't ship curl/wget by default in older tags — if this fails,
-      # swap to a TCP check: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333'"]
-      test: ["CMD-SHELL", "nc -z localhost 6333 || exit 1"]
-      interval: 5s
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:6333/health || exit 1"]
+      interval: 10s
       timeout: 5s
       retries: 10
 
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama_data:/root/.ollama     # this is where pulled models live — protect this volume,
-  #                                      # losing it means re-downloading several GB
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 10
-  #     start_period: 20s              # give the server a moment before healthchecks start counting
-
-  # one-shot container: pulls your 3 fallback models, then exits.
-  # depends on ollama being *healthy*, not just started.
-  # ollama-pull:
-  #   image: ollama/ollama:latest
-  #   depends_on:
-  #     ollama:
-  #       condition: service_healthy
-  #   entrypoint: >
-  #     sh -c "
-  #     ollama pull llama3.2:3b --host ollama:11434 &&
-  #     ollama pull qwen2.5:7b --host ollama:11434 &&
-  #     ollama pull phi4:14b --host ollama:11434
-  #     "
-  #   environment:
-  #     OLLAMA_HOST: ollama:11434
-
-  # ---------- APPLICATION ----------
+  # ==========================================================
+  # BACKEND
+  # ==========================================================
 
   backend:
-    build: ./backend
-    env_file: .env
+    build:
+      context: ./backend
+
+    restart: unless-stopped
+
+    env_file:
+      - ./backend/.env
+
     ports:
       - "8000:8000"
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,50 +89,45 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      # ollama:
-      #   condition: service_healthy
-    volumes:
-      - ./backend:/app          # bind mount for hot-reload during dev — remove for prod images
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  celery_worker:
-    build: ./backend            # same image as backend, different command
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
     volumes:
       - ./backend:/app
-    command: celery -A app.core.celery_app worker --loglevel=info
 
-  # celery_beat:
-  #   Restore this service if/when periodic tasks are added to celery_app.conf.beat_schedule
-  #   (e.g. nightly cleanup of expired Redis event keys, re-indexing stale Qdrant chunks).
-  #   build: ./backend
-  #   env_file: .env
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #   volumes:
-  #     - ./backend:/app
-  #   command: celery -A app.core.celery_app beat --loglevel=info
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
 
-  # frontend:
-  #   build: ./frontend
-  #   env_file: .env
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - backend
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules      # prevents host node_modules (or its absence) from
-  #                               # shadowing the one installed inside the container
-  #   command: npm run dev -- --host 0.0.0.0
+  # ==========================================================
+  # CELERY WORKER
+  # ==========================================================
+
+  celery_worker:
+    build:
+      context: ./backend
+
+    restart: unless-stopped
+
+    env_file:
+      - ./backend/.env
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    volumes:
+      - ./backend:/app
+
+    command: >
+      celery
+      -A app.core.celery_app
+      worker
+      --loglevel=info
 
 volumes:
   postgres_data:
+  redis_data:
   qdrant_data:
-  # ollama_data:
