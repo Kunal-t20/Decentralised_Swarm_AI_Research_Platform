@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db, redis_client
 from app.core.security import get_current_user
@@ -15,6 +15,7 @@ router = APIRouter(prefix="/research", tags=["research"])
 @router.post("", response_model=ResearchJobResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(SlidingWindowRateLimiter(limit=10, window_seconds=60))])
 def create_research_job(
     payload: ResearchJobCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -22,23 +23,29 @@ def create_research_job(
     job = ResearchJob(
         user_id=current_user.id,
         topic=payload.topic,
-        status="pending"
+        status="QUEUED"
     )
     db.add(job)
     db.commit()
     db.refresh(job)
-    
+
     # 2. Emit initial event log in Redis
     emit(
         job_id=job.id,
         event_type="NODE_START",
         message=f"Research job created for topic: '{payload.topic}'"
     )
-    
-    # 3. Queue the background task
-    run_research_swarm.delay(job.id, payload.topic)
-    
+
+    # 3. Queue the background task (Celery dispatch + FastAPI BackgroundTasks fallback)
+    try:
+        run_research_swarm.delay(job.id, payload.topic)
+    except Exception as c_err:
+        print(f"Celery dispatch note: {c_err}")
+
+    background_tasks.add_task(run_research_swarm, job.id, payload.topic)
+
     return job
+
 
 @router.get("", response_model=list[ResearchJobResponse])
 def list_research_jobs(
@@ -61,15 +68,15 @@ def get_research_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Research job not found"
         )
-        
+
     # Get events from Redis
     events = get_events_since(job_id, since)
-    
-    # Get report if completed
+
+    # Get report if completed or completed_with_warning
     report = None
-    if job.status == "completed":
+    if job.status.upper() in ["COMPLETED", "COMPLETED_WITH_WARNING"]:
         report = db.query(ResearchReport).filter(ResearchReport.job_id == job_id).first()
-        
+
     return {
         "id": job.id,
         "topic": job.topic,
@@ -91,7 +98,7 @@ def get_research_report(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Research job not found"
         )
-    if job.status != "completed":
+    if job.status.upper() not in ["COMPLETED", "COMPLETED_WITH_WARNING"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Research job is not completed yet"
@@ -130,3 +137,40 @@ def delete_research_job(
         print(f"Warning: Failed to delete Redis keys for job {job_id}: {e}")
         
     return
+
+@router.post("/{job_id}/retry", response_model=ResearchJobResponse)
+def retry_research_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    job = db.query(ResearchJob).filter(ResearchJob.id == job_id, ResearchJob.user_id == current_user.id).first()
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research job not found"
+        )
+
+    # Reset job status to QUEUED and loop_count to 0
+    job.status = "QUEUED"
+    job.loop_count = 0
+    db.commit()
+    db.refresh(job)
+
+    # Emit restart event
+    emit(
+        job_id=job.id,
+        event_type="STATUS_CHANGE",
+        message=f"Research job restarted by user for topic: '{job.topic}'"
+    )
+
+    # Dispatch task again
+    try:
+        run_research_swarm.delay(job.id, job.topic)
+    except Exception as c_err:
+        print(f"Celery retry dispatch note: {c_err}")
+
+    background_tasks.add_task(run_research_swarm, job.id, job.topic)
+
+    return job

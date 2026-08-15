@@ -6,11 +6,32 @@ from app.swarm.prompts import ANALYST_SYSTEM_PROMPT, ANALYST_USER_PROMPT_TEMPLAT
 from app.swarm.state import SwarmState
 from app.swarm.nodes.researcher import get_embedding
 
-def analyst_node(state: SwarmState) -> dict:
-    job_id = state.get("job_id")
-    topic = state.get("topic")
-    critic_feedback = state.get("critic_feedback") or "None. This is the first iteration."
+
+def _build_sources_list(sources: list) -> str:
+    """
+    Convert the sources list from SwarmState into a numbered string for the LLM prompt.
+    Each source becomes: [N] Title — URL
+    """
+    if not sources:
+        return "No external sources retrieved."
     
+    lines = []
+    for idx, src in enumerate(sources, start=1):
+        title = src.get("title") or src.get("source_title") or "Untitled Source"
+        url   = src.get("url")   or src.get("source_url")   or ""
+        if url:
+            lines.append(f"[{idx}] {title} — {url}")
+        else:
+            lines.append(f"[{idx}] {title}")
+    return "\n".join(lines)
+
+
+def analyst_node(state: SwarmState) -> dict:
+    job_id         = state.get("job_id")
+    topic          = state.get("topic")
+    critic_feedback = state.get("critic_feedback") or "None. This is the first iteration."
+    sources        = state.get("sources") or []
+
     emit(
         job_id=job_id,
         event_type="NODE_START",
@@ -18,7 +39,9 @@ def analyst_node(state: SwarmState) -> dict:
         message="Analyst agent started. Querying Qdrant vector database for relevant research contexts..."
     )
 
-    # 1. Retrieve relevant chunks from Qdrant using vector search
+    # -------------------------------------------------------------------------
+    # 1. Retrieve relevant chunks from Qdrant vector store (up to 15 chunks)
+    # -------------------------------------------------------------------------
     retrieved_text = ""
     try:
         query_vector = get_embedding(topic)
@@ -30,14 +53,24 @@ def analyst_node(state: SwarmState) -> dict:
                 )
             ]
         )
-        
-        search_results = qdrant_client.search(
-            collection_name="research_chunks",
-            query_vector=query_vector,
-            query_filter=search_filter,
-            limit=10,
-        )
-        
+
+        search_results = []
+        if hasattr(qdrant_client, "query_points"):
+            response = qdrant_client.query_points(
+                collection_name="research_chunks",
+                query=query_vector,
+                query_filter=search_filter,
+                limit=15,          # increased from 10 → 15 for richer context
+            )
+            search_results = response.points
+        elif hasattr(qdrant_client, "search"):
+            search_results = qdrant_client.search(
+                collection_name="research_chunks",
+                query_vector=query_vector,
+                query_filter=search_filter,
+                limit=15,
+            )
+
         if search_results:
             emit(
                 job_id=job_id,
@@ -47,9 +80,9 @@ def analyst_node(state: SwarmState) -> dict:
             )
             for idx, hit in enumerate(search_results):
                 payload = hit.payload or {}
-                text = payload.get("text", "")
-                title = payload.get("source_title", "Unknown Source")
-                url = payload.get("source_url", "")
+                text    = payload.get("text", "")
+                title   = payload.get("source_title", "Unknown Source")
+                url     = payload.get("source_url", "")
                 retrieved_text += f"[{idx+1}] Source: {title} ({url})\nContent: {text}\n\n"
         else:
             emit(
@@ -66,34 +99,43 @@ def analyst_node(state: SwarmState) -> dict:
             message=f"Error searching Qdrant: {e}. Falling back to raw researcher notes."
         )
 
-    # Fallback to research_notes in state if vector retrieval didn't return content
+    # Fall back to state's research_notes if Qdrant retrieval was empty
     context = retrieved_text.strip() if retrieved_text else state.get("research_notes", "")
 
-    # 2. Call LLM to draft/update the report
-    user_content = ANALYST_USER_PROMPT_TEMPLATE.format(
-        topic=topic,
-        research_notes=context,
-        critic_feedback=critic_feedback
-    )
+    # -------------------------------------------------------------------------
+    # 2. Build numbered sources list for the LLM prompt
+    # -------------------------------------------------------------------------
+    sources_list = _build_sources_list(sources)
     
-    messages = [
-        {"role": "system", "content": ANALYST_SYSTEM_PROMPT},
-        {"role": "user", "content": user_content}
-    ]
-
     emit(
         job_id=job_id,
         event_type="LOG",
         agent="analyst",
-        message="Generating/updating research draft..."
+        message=f"Generating deep research report with {len(sources)} cited sources..."
     )
 
+    # -------------------------------------------------------------------------
+    # 3. Call LLM to draft/update the deep research report
+    # -------------------------------------------------------------------------
+    user_content = ANALYST_USER_PROMPT_TEMPLATE.format(
+        topic=topic,
+        sources_list=sources_list,
+        research_notes=context,
+        critic_feedback=critic_feedback
+    )
+
+    messages = [
+        {"role": "system", "content": ANALYST_SYSTEM_PROMPT},
+        {"role": "user",   "content": user_content}
+    ]
+
     try:
-        response = llm_client.call_llm("analyst", messages, temperature=0.7)
+        loop_count  = state.get("loop_count", 0)
+        response    = llm_client.call_llm("analyst", messages, temperature=0.7, cache_bust=str(loop_count))
         draft_content = response["content"]
-        tier_used = response["tier_used"]
-        model_name = response["model"]
-        
+        tier_used   = response["tier_used"]
+        model_name  = response["model"]
+
         emit(
             job_id=job_id,
             event_type="LOG",
@@ -114,7 +156,7 @@ def analyst_node(state: SwarmState) -> dict:
         job_id=job_id,
         event_type="NODE_END",
         agent="analyst",
-        message="Analyst completed compilation."
+        message="Analyst completed deep research report compilation."
     )
 
     return {

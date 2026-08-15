@@ -120,7 +120,7 @@ def test_llm_circuit_breaker_skips_open_circuits():
         assert response["tier_used"] == 2
         # Verify post payload called with Tier 2 model: google/gemma-4-26b-a4b-it:free
         called_args, called_kwargs = mock_post.call_args
-        assert called_kwargs["json"]["model"] == "google/gemma-4-26b-a4b-it:free"
+        assert called_kwargs["json"]["model"] == "openrouter/free"
 
 # Helper helper to dump JSON
 import json

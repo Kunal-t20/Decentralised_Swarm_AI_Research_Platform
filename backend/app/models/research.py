@@ -33,6 +33,9 @@ class ResearchJob(Base):
     feedback_logs = relationship(
         "FeedbackLog", back_populates="job", cascade="all, delete-orphan"
     )
+    audit_events = relationship(
+        "AuditEvent", back_populates="job", cascade="all, delete-orphan"
+    )
 
 
 class ResearchReport(Base):
@@ -64,3 +67,22 @@ class FeedbackLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     job = relationship("ResearchJob", back_populates="feedback_logs")
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(
+        String(36), ForeignKey("research_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    event_id = Column(Integer, nullable=False)
+    event_type = Column(String(50), nullable=False)
+    agent = Column(String(50), nullable=True)
+    tier_used = Column(Integer, nullable=True)
+    message = Column(Text, nullable=False)
+    data = Column(JSONB, default=dict, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    job = relationship("ResearchJob", back_populates="audit_events")
+

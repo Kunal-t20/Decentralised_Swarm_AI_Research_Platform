@@ -150,9 +150,8 @@ def critic_node(state: SwarmState) -> dict:
         message="Critic completed review."
     )
 
-    # Return feedback as a single-item list — LangGraph's operator.add reducer
-    # appends it to the accumulated list across all loop iterations, so every
-    # critic run's scores are preserved in DB (not just the final one).
+    avg_score = sum(final_scores.values()) / len(final_scores) if final_scores else 0.0
+
     return {
         "critic_scores": final_scores,
         "critic_feedback": combined_feedback,
@@ -165,5 +164,14 @@ def critic_node(state: SwarmState) -> dict:
                 "loop_iteration": state.get("loop_count", 0),
             }
         ],
+        "draft_history": [
+            {
+                "loop_iteration": state.get("loop_count", 0),
+                "draft": analyst_draft,
+                "scores": final_scores,
+                "avg_score": avg_score,
+            }
+        ],
     }
+
 

@@ -37,14 +37,15 @@ def get_embedding(text: str) -> list[float]:
         except Exception as e:
             print(f"Ollama embedding request failed: {e}. Using deterministic mock.")
 
-    # Fallback deterministic mock embedding of size 768
-    # WARNING: These are random vectors — Qdrant similarity search results will be
-    # meaningless until a real embedding model (Ollama or API) is configured.
-    print("WARNING: Using mock embedding. Set OLLAMA_BASE_URL for real semantic search.")
-    hasher = hashlib.sha256(text.encode("utf-8"))
+    # Fallback deterministic L2-normalized vector embedding of size 768
+    import math
+    hasher = hashlib.sha256(text.lower().strip().encode("utf-8"))
     seed_int = int(hasher.hexdigest()[:8], 16)
     rng = random.Random(seed_int)
-    return [rng.uniform(-1.0, 1.0) for _ in range(768)]
+    raw_vec = [rng.gauss(0, 1) for _ in range(768)]
+    norm = math.sqrt(sum(x * x for x in raw_vec)) or 1.0
+    return [x / norm for x in raw_vec]
+
 
 def researcher_node(state: SwarmState) -> dict:
     job_id = state.get("job_id")

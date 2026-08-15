@@ -7,18 +7,18 @@ from app.core.database import redis_client
 
 MODEL_MAPPING = {
     "researcher": {
-        1: "openai/gpt-oss-20b:free",
-        2: "google/gemma-4-26b-a4b-it:free",
+        1: "openai/gpt-oss-120b",
+        2: "openrouter/free",
         3: "llama3.2:3b",
     },
     "analyst": {
-        1: "openai/gpt-oss-120b:free",
-        2: "qwen/qwen3-next-80b-a3b-instruct:free",
+        1: "openai/gpt-oss-120b",
+        2: "openrouter/free",
         3: "qwen2.5:7b",
     },
     "critic": {
-        1: "deepseek/deepseek-r1:free",
-        2: "nvidia/nemotron-3-super-120b-a12b:free",
+        1: "openai/gpt-oss-120b",
+        2: "nvidia/nemotron-3-nano-30b-a3b:free",
         3: "phi4:14b",
     },
 }
@@ -31,7 +31,7 @@ class LLMClient:
         """Retrieve cached prompt response if available.
 
         cache_bust: an extra string mixed into the cache key to invalidate stale
-        entries (e.g. pass loop_count for critic calls to avoid loop-stall bugs).
+        entries (e.g. pass loop_count for analyst/critic calls to avoid loop-stall bugs).
         """
         serialized = json.dumps({"model": model, "messages": messages, "bust": cache_bust}, sort_keys=True)
         prompt_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
@@ -100,7 +100,7 @@ class LLMClient:
         except Exception as e:
             print(f"Warning: Redis circuit breaker failure record failed: {e}")
 
-    def call_llm(self, agent: str, messages: list, temperature: float = 0.7) -> dict:
+    def call_llm(self, agent: str, messages: list, temperature: float = 0.7, cache_bust: str = "") -> dict:
         """
         Executes chat completion routing across Tiers 1-3 with prompt caching and circuit breakers.
         Returns a dict: {"content": str, "model": str, "tier_used": int}
@@ -119,7 +119,7 @@ class LLMClient:
                 continue
 
             # Check prompt cache first
-            cached_response = self._get_prompt_cache(messages, model)
+            cached_response = self._get_prompt_cache(messages, model, cache_bust=cache_bust)
             if cached_response:
                 print(f"Cache hit for model {model}")
                 return {"content": cached_response, "model": model, "tier_used": tier}
@@ -128,7 +128,7 @@ class LLMClient:
             try:
                 content = self._execute_call(agent, tier, model, messages, temperature)
                 self._record_success(agent, tier)
-                self._set_prompt_cache(messages, model, content)
+                self._set_prompt_cache(messages, model, content, cache_bust=cache_bust)
                 return {"content": content, "model": model, "tier_used": tier}
             except Exception as e:
                 print(f"Error calling {agent} Tier {tier} ({model}): {e}")
@@ -171,11 +171,38 @@ class LLMClient:
 
     def _execute_call(self, agent: str, tier: int, model: str, messages: list, temperature: float) -> str:
         """Perform the actual HTTP call to the tier's provider."""
-        if tier in [1, 2]:
-            # Call OpenRouter API (or Groq if specified and keys exist, but OpenRouter is unified)
-            # Default to OpenRouter endpoint since these are OpenRouter model strings.
-            # However, if GROQ_API_KEY is available and we want to direct call Groq (if the model is a Groq model),
-            # but standardizing on OpenRouter as the primary cloud gateway is simpler and matches the spec.
+        if tier == 1:
+            # Direct call to Groq API
+            if not settings.GROQ_API_KEY:
+                raise ValueError("GROQ_API_KEY is not configured")
+
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(url, headers=headers, json=payload)
+                if response.status_code != 200:
+                    raise httpx.HTTPStatusError(
+                        f"Groq returned status {response.status_code}: {response.text}",
+                        request=response.request,
+                        response=response,
+                    )
+                data = response.json()
+                return data["choices"][0]["message"]["content"]
+
+        elif tier == 2:
+            # OpenRouter API Call
+            if not settings.OPENROUTER_API_KEY:
+                raise ValueError("OPENROUTER_API_KEY is not configured")
+
             url = "https://openrouter.ai/api/v1/chat/completions"
             headers = {
                 "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
@@ -188,7 +215,7 @@ class LLMClient:
                 "messages": messages,
                 "temperature": temperature,
             }
-            
+
             with httpx.Client(timeout=self.timeout) as client:
                 response = client.post(url, headers=headers, json=payload)
                 if response.status_code != 200:
@@ -204,7 +231,7 @@ class LLMClient:
             # Local Ollama Fallback
             if not settings.OLLAMA_BASE_URL:
                 raise ValueError("Ollama fallback is disabled (OLLAMA_BASE_URL is not set)")
-                
+
             url = f"{settings.OLLAMA_BASE_URL}/api/chat"
             payload = {
                 "model": model,
@@ -214,7 +241,7 @@ class LLMClient:
                     "temperature": temperature,
                 },
             }
-            
+
             with httpx.Client(timeout=self.timeout) as client:
                 response = client.post(url, json=payload)
                 if response.status_code != 200:

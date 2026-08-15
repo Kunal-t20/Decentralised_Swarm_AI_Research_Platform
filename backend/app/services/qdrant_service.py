@@ -28,6 +28,19 @@ def init_qdrant():
             print(f"Qdrant collection '{collection_name}' created.")
         else:
             print(f"Qdrant collection '{collection_name}' already exists.")
+
+        # Create payload index for job_id to enable fast filtered lookups
+        try:
+            qdrant_client.create_payload_index(
+                collection_name=collection_name,
+                field_name="job_id",
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+            print("Qdrant payload index for 'job_id' ensured.")
+        except Exception as idx_err:
+            print(f"Note: Payload index check for 'job_id': {idx_err}")
+
     except Exception as e:
         # Log a warning but don't fail boot if Qdrant is unreachable during bootstrap
         print(f"Warning: Failed to check/initialize Qdrant collection: {e}")
+

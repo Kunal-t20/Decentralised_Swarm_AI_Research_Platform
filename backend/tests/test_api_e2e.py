@@ -52,7 +52,8 @@ def test_auth_and_job_lifecycle():
     
     # 4. Create Research Job (Mocking the Celery background task)
     topic = "Quantum Superposition"
-    with patch("app.api.v1.research.run_research_swarm.delay") as mock_celery:
+    with patch("app.api.v1.research.run_research_swarm.delay") as mock_celery, \
+         patch("fastapi.BackgroundTasks.add_task") as mock_bg:
         job_response = client.post(
             "/api/v1/research",
             json={"topic": topic},
@@ -61,7 +62,7 @@ def test_auth_and_job_lifecycle():
         assert job_response.status_code == 201
         job_data = job_response.json()
         assert job_data["topic"] == topic
-        assert job_data["status"] == "pending"
+        assert job_data["status"] == "QUEUED"
         job_id = job_data["id"]
         
         # Verify background Celery task was dispatched with correct args
@@ -79,7 +80,7 @@ def test_auth_and_job_lifecycle():
     assert status_response.status_code == 200
     status_data = status_response.json()
     assert status_data["id"] == job_id
-    assert status_data["status"] == "pending"
+    assert status_data["status"] == "QUEUED"
     assert "events" in status_data
 
     # 7. Delete Research Job

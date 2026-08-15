@@ -1,0 +1,632 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===================================================================
+   Signal & Brass — CSS Custom Properties
+   =================================================================== */
+:root {
+  --color-bg: #0C0D0F;
+  --color-surface: #191B1F;
+  --color-surface-secondary: #131417;
+  --color-surface-elevated: #202226;
+  --color-border: #2C2F35;
+  --color-border-subtle: #1E2025;
+  --color-text-primary: #F2F1ED;
+  --color-text-secondary: #8E9096;
+  --color-text-muted: #52555C;
+  --color-accent-teal: #2BA88C;
+  --color-accent-teal-dim: #1D7260;
+  --color-accent-teal-faint: #0D3028;
+  --color-accent-brass: #C9A227;
+  --color-accent-brass-faint: #2A220A;
+  --color-rust: #B5533C;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+}
+
+/* ===================================================================
+   Base Reset
+   =================================================================== */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    selection: none;
+  }
+
+  ::selection {
+    background: #2BA88C33;
+    color: #F2F1ED;
+  }
+
+  /* Subtle noise texture via pseudo-element on body */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.02;
+  }
+}
+
+/* ===================================================================
+   Component Layer
+   =================================================================== */
+@layer components {
+
+  /* --- Instrument Panel (surface) --- */
+  .panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+  }
+
+  .panel-secondary {
+    background-color: var(--color-surface-secondary);
+    border: 1px solid var(--color-border);
+  }
+
+  /* --- Primary CTA Button (solid teal, flat) --- */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    background-color: var(--color-accent-teal);
+    color: #0C0D0F;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background-color 150ms ease, box-shadow 150ms ease;
+    white-space: nowrap;
+  }
+  .btn-primary:hover {
+    background-color: #34C8A8;
+    box-shadow: inset 0 0 0 1px var(--color-accent-brass);
+  }
+  .btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* --- Secondary Button (ghost with border) --- */
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background-color: transparent;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease;
+  }
+  .btn-secondary:hover {
+    color: var(--color-text-primary);
+    border-color: var(--color-text-muted);
+    background-color: var(--color-surface-elevated);
+  }
+
+  /* --- Danger / Retry variant --- */
+  .btn-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background-color: transparent;
+    color: var(--color-warning);
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 8px;
+    border: 1px solid #5C3D04;
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease;
+  }
+  .btn-warning:hover {
+    background-color: #1A100100;
+    border-color: var(--color-warning);
+  }
+
+  /* --- Input field --- */
+  .field {
+    width: 100%;
+    background-color: var(--color-surface-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 11px 14px 11px 40px;
+    font-size: 14px;
+    color: var(--color-text-primary);
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .field::placeholder {
+    color: var(--color-text-muted);
+  }
+  .field:focus {
+    border-color: var(--color-accent-teal);
+    box-shadow: 0 0 0 2px #2BA88C18;
+  }
+
+  /* --- Hairline separator --- */
+  .hairline {
+    border: none;
+    border-top: 1px solid var(--color-border-subtle);
+  }
+
+  /* --- Chip / command suggestion --- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+  .chip:hover {
+    color: var(--color-accent-brass);
+    border-color: var(--color-accent-brass);
+  }
+
+  /* --- Status dot --- */
+  .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.success  { background-color: var(--color-success); }
+  .status-dot.running  { background-color: var(--color-accent-teal); }
+  .status-dot.warning  { background-color: var(--color-warning); }
+  .status-dot.error    { background-color: var(--color-error); }
+  .status-dot.queued   { background-color: var(--color-text-muted); }
+
+  /* --- Metric card (hairline variant — no box) --- */
+  .metric-item {
+    padding: 0 24px;
+    flex: 1;
+  }
+  .metric-item + .metric-item {
+    border-left: 1px solid var(--color-border-subtle);
+  }
+
+  /* --- Mono label --- */
+  .mono-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  /* --- Agent port node (instrument panel style) --- */
+  .agent-port {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .agent-port-hex {
+    width: 44px;
+    height: 44px;
+    border: 1.25px solid var(--color-border);
+    background: var(--color-surface-secondary);
+    clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 200ms ease, background-color 200ms ease;
+    position: relative;
+  }
+  .agent-port-hex.active {
+    border-color: var(--color-accent-teal);
+    background: var(--color-accent-teal-faint);
+  }
+  .agent-port-hex.active::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+    border: 1.25px solid var(--color-accent-teal);
+    animation: sonar-hex 1.6s ease-out 1;
+    opacity: 0;
+  }
+  .agent-port-hex.completed {
+    border-color: var(--color-accent-teal-dim);
+    background: #0D3028;
+  }
+  .agent-port-hex.carrying {
+    border-color: var(--color-accent-brass);
+    background: var(--color-accent-brass-faint);
+  }
+  .agent-port-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  /* --- Connector line --- */
+  .connector-line {
+    height: 1.25px;
+    flex: 1;
+    background-color: var(--color-border);
+    position: relative;
+  }
+  .connector-line.active {
+    background-color: var(--color-accent-brass);
+  }
+
+  /* --- Progress bar (teal fill, no rounded cap) --- */
+  .progress-track {
+    width: 100%;
+    height: 2px;
+    background-color: var(--color-border-subtle);
+    border-radius: 0;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background-color: var(--color-accent-teal);
+    transition: width 400ms ease;
+  }
+
+  /* --- Nav underline tab --- */
+  .nav-tab {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    padding-bottom: 12px;
+    border-bottom: 1px solid transparent;
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .nav-tab:hover {
+    color: var(--color-text-primary);
+  }
+  .nav-tab.active {
+    color: var(--color-text-primary);
+    border-bottom-color: var(--color-accent-teal);
+  }
+
+  /* --- Blueprint dot-grid overlay for hero section --- */
+  .hero-grid {
+    background-image: radial-gradient(circle, #2C2F35 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* --- Teal wash gradient (hero only exception) --- */
+  .hero-wash {
+    background: linear-gradient(135deg, #2BA88C06 0%, transparent 60%);
+  }
+
+  /* --- Event type badge --- */
+  .event-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* --- Wordmark brass arcs (CSS only) --- */
+  .wordmark-arcs {
+    width: 28px;
+    height: 28px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* --- Brass accent text --- */
+  .text-brass { color: var(--color-accent-brass); }
+  .text-teal  { color: var(--color-accent-teal); }
+  .text-rust  { color: var(--color-rust); }
+
+  /* --- Score bar animation utility --- */
+  .score-bar {
+    height: 2px;
+    background-color: var(--color-accent-teal);
+    border-radius: 1px;
+    transform-origin: left;
+  }
+}
+
+/* ===================================================================
+   Sonar animation (single expand-and-fade ring)
+   =================================================================== */
+@keyframes sonar-hex {
+  0%   { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(1.45); }
+}
+
+@keyframes sonar {
+  0%   { box-shadow: 0 0 0 0 #2BA88C55; }
+  100% { box-shadow: 0 0 0 12px #2BA88C00; }
+}
+
+/* ===================================================================
+   Custom Scrollbars
+   =================================================================== */
+::-webkit-scrollbar        { width: 4px; height: 4px; }
+::-webkit-scrollbar-track  { background: var(--color-bg); }
+::-webkit-scrollbar-thumb  { background: var(--color-border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+/* ===================================================================
+   Prose (report markdown) — override to match palette
+   =================================================================== */
+.prose-report {
+  color: var(--color-text-primary);
+  max-width: none;
+  line-height: 1.75;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+.prose-report h1, .prose-report h2, .prose-report h3 {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+.prose-report h2 { font-size: 1.125rem; }
+.prose-report h3 { font-size: 1rem; color: var(--color-text-secondary); }
+.prose-report p  { color: #C8C7C4; margin-bottom: 1em; font-size: 14px; }
+.prose-report strong { color: var(--color-text-primary); font-weight: 600; }
+.prose-report em  { color: var(--color-accent-brass); font-style: italic; }
+.prose-report code {
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--color-accent-teal);
+}
+.prose-report pre {
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.prose-report ul, .prose-report ol { padding-left: 1.5em; margin-bottom: 1em; }
+.prose-report li { color: #C8C7C4; margin-bottom: 4px; font-size: 14px; }
+.prose-report a { color: var(--color-accent-teal); text-decoration: underline; }
+.prose-report blockquote {
+  border-left: 2px solid var(--color-accent-brass);
+  padding-left: 16px;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin: 1em 0;
+}
+.prose-report hr {
+  border: none;
+  border-top: 1px solid var(--color-border-subtle);
+  margin: 1.5em 0;
+}
+
+/* ===================================================================
+   Utility overrides
+   =================================================================== */
+.transition-fast { transition-duration: 150ms; }
+.transition-mid  { transition-duration: 200ms; }
+
+/* ===================================================================
+   Export & Print PDF Styles
+   =================================================================== */
+.print-only-header {
+  display: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 18mm 15mm 20mm 15mm;
+  }
+
+  /* Hide UI elements that shouldn't appear in print/PDF */
+  header,
+  nav,
+  .no-print,
+  #export-report-btn,
+  .export-dropdown,
+  button,
+  .nav-tab,
+  .hero-grid,
+  .wordmark-arcs,
+  .mono-label,
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* Force white background & dark text for print */
+  html, body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Show print header */
+  .print-only-header {
+    display: block !important;
+    border-bottom: 2pt solid #2ba88c !important;
+    padding-bottom: 12pt !important;
+    margin-bottom: 20pt !important;
+  }
+
+  /* Unclip containers so content flows continuously across printable pages */
+  .panel {
+    background: #ffffff !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  div[style*="maxHeight"],
+  div[style*="max-height"],
+  div[style*="overflowY"],
+  div[style*="overflow-y"] {
+    max-height: none !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Hide TOC sidebar during print */
+  nav[style*="sticky"] {
+    display: none !important;
+  }
+
+  /* Headings print styling */
+  h1, h2, h3, h4 {
+    color: #0f172a !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  h1 {
+    font-size: 22pt !important;
+    margin-top: 0 !important;
+    border-bottom: 1.5pt solid #2ba88c !important;
+    padding-bottom: 6pt !important;
+  }
+
+  h2 {
+    font-size: 16pt !important;
+    margin-top: 18pt !important;
+  }
+
+  h3 {
+    font-size: 13pt !important;
+    margin-top: 14pt !important;
+  }
+
+  p, li {
+    color: #1e293b !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Pre / Code blocks in print */
+  pre {
+    background-color: #f8fafc !important;
+    border: 1pt solid #cbd5e1 !important;
+    border-radius: 4pt !important;
+    color: #0f172a !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    padding: 10pt !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  pre code {
+    color: #0f172a !important;
+  }
+
+  code {
+    background-color: #f1f5f9 !important;
+    color: #0f766e !important;
+    border: 1pt solid #e2e8f0 !important;
+    font-size: 9.5pt !important;
+  }
+
+  /* Callouts / Blockquotes in print */
+  blockquote, div[style*="borderLeft"] {
+    background-color: #f0fdf4 !important;
+    border-left-color: #2ba88c !important;
+    color: #166534 !important;
+    border-radius: 0 4pt 4pt 0 !important;
+  }
+
+  /* Tables in print */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    margin: 14pt 0 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  th {
+    background-color: #e6f4f1 !important;
+    color: #1d7260 !important;
+    border: 1pt solid #cbd5e1 !important;
+    padding: 6pt 8pt !important;
+  }
+
+  td {
+    border: 1pt solid #cbd5e1 !important;
+    color: #334155 !important;
+    padding: 6pt 8pt !important;
+  }
+
+  tr:nth-child(even) {
+    background-color: #f8fafc !important;
+  }
+
+  a {
+    color: #2ba88c !important;
+    text-decoration: underline !important;
+  }
+}
+

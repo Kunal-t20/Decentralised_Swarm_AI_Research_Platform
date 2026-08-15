@@ -52,22 +52,19 @@ async def health_check(db: Session = Depends(get_db)):
         health_status["services"]["celery_broker"] = f"offline: {e}"
         health_status["status"] = "unhealthy"
 
-    # 5. Check Ollama
+    # 5. Check Ollama (Optional Tier 3 Fallback)
     if settings.OLLAMA_BASE_URL:
         try:
-            response = httpx.get(f"{settings.OLLAMA_BASE_URL}/api/tags", timeout=2.0)
+            response = httpx.get(f"{settings.OLLAMA_BASE_URL}/api/tags", timeout=1.0)
             if response.status_code == 200:
                 health_status["services"]["ollama"] = "online"
             else:
-                health_status["services"]["ollama"] = (
-                    f"offline (status {response.status_code})"
-                )
-                health_status["status"] = "unhealthy"
+                health_status["services"]["ollama"] = f"offline (status {response.status_code})"
         except Exception as e:
             health_status["services"]["ollama"] = f"offline: {e}"
-            health_status["status"] = "unhealthy"
     else:
         health_status["services"]["ollama"] = "disabled"
+
 
     if health_status["status"] == "unhealthy":
         raise HTTPException(

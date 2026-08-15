@@ -69,21 +69,39 @@ workflow.add_conditional_edges(
 # 5. Compile with Postgres checkpointer — reuses the project's existing Postgres DB,
 #    no extra database needed. A connection pool handles Celery's concurrent tasks safely.
 #    On first run, setup() creates the required checkpoint tables.
-_CHECKPOINT_CONN_STRING = (
-    os.getenv("DATABASE_URL", "postgresql://swarm:swarm@localhost:5432/research_db")
-    .replace("postgresql+psycopg://", "postgresql://")  # strip SQLAlchemy dialect prefix
-)
+# 5. Lazy compilation with Postgres checkpointer wrapper to prevent import-time connection blocking
+class LazySwarmGraph:
+    def __init__(self):
+        self._compiled_graph = None
 
-_checkpoint_pool = ConnectionPool(
-    conninfo=_CHECKPOINT_CONN_STRING,
-    max_size=5,
-    kwargs={"autocommit": True, "prepare_threshold": 0},
-    open=False,  # open lazily on first use so import doesn't block
-)
-_checkpoint_pool.open(wait=True)
+    def _get_graph(self):
+        if self._compiled_graph is None:
+            try:
+                conn_string = (
+                    os.getenv("DATABASE_URL", "postgresql://swarm:swarm@localhost:5432/research_db")
+                    .replace("postgresql+psycopg://", "postgresql://")
+                )
+                pool = ConnectionPool(
+                    conninfo=conn_string,
+                    max_size=5,
+                    kwargs={"autocommit": True, "prepare_threshold": 0},
+                    open=False,
+                )
+                pool.open(wait=True)
+                checkpointer = PostgresSaver(pool)
+                checkpointer.setup()
+                self._compiled_graph = workflow.compile(checkpointer=checkpointer)
+            except Exception as e:
+                print(f"Warning: Postgres checkpointer initialization skipped ({e}). Compiling graph without persistence.")
+                self._compiled_graph = workflow.compile()
+        return self._compiled_graph
 
-checkpointer = PostgresSaver(_checkpoint_pool)
-checkpointer.setup()  # creates langgraph checkpoint tables if they don't exist yet
+    def invoke(self, input, config=None, **kwargs):
+        return self._get_graph().invoke(input, config=config, **kwargs)
 
-swarm_graph = workflow.compile(checkpointer=checkpointer)
+    def stream(self, input, config=None, **kwargs):
+        return self._get_graph().stream(input, config=config, **kwargs)
+
+swarm_graph = LazySwarmGraph()
+
 

@@ -6,6 +6,7 @@ celery_app = Celery(
     "swarm_tasks",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
+    include=["app.tasks.swarm_tasks"],
 )
 
 # Standard celery configuration options
