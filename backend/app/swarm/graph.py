@@ -3,11 +3,14 @@ import os
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg_pool import ConnectionPool
+from app.core.logger import get_logger
 from app.swarm.state import SwarmState
 from app.swarm.nodes.researcher import researcher_node
 from app.swarm.nodes.analyst import analyst_node
 from app.swarm.nodes.critic import critic_node
 from app.services.events_service import emit
+
+logger = get_logger(__name__)
 
 def loop_back_node(state: SwarmState) -> dict:
     """Transition node to increment loop count and emit loopback event."""
@@ -92,7 +95,7 @@ class LazySwarmGraph:
                 checkpointer.setup()
                 self._compiled_graph = workflow.compile(checkpointer=checkpointer)
             except Exception as e:
-                print(f"Warning: Postgres checkpointer initialization skipped ({e}). Compiling graph without persistence.")
+                logger.warning("Postgres checkpointer init skipped (%s). Compiling without persistence.", e)
                 self._compiled_graph = workflow.compile()
         return self._compiled_graph
 

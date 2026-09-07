@@ -4,10 +4,13 @@ import uuid
 import httpx
 from qdrant_client.http import models as qdrant_models
 from app.core.config import settings
+from app.core.logger import get_logger
 from app.services.qdrant_service import qdrant_client
 from app.services.search_service import search_service
 from app.services.events_service import emit
 from app.swarm.state import SwarmState
+
+logger = get_logger(__name__)
 
 def chunk_text(text: str, max_words: int = 400) -> list[str]:
     """Split text into chunks of roughly max_words."""
@@ -35,7 +38,7 @@ def get_embedding(text: str) -> list[float]:
                 if "embedding" in data:
                     return data["embedding"]
         except Exception as e:
-            print(f"Ollama embedding request failed: {e}. Using deterministic mock.")
+            logger.warning("Ollama embedding request failed: %s. Using deterministic mock.", e)
 
     # Fallback deterministic L2-normalized vector embedding of size 768
     import math
@@ -135,6 +138,7 @@ def researcher_node(state: SwarmState) -> dict:
                 message=f"Successfully indexed {len(points)} chunks into Qdrant collection 'research_chunks'."
             )
         except Exception as e:
+            logger.error("[job=%s] Failed to upsert points into Qdrant: %s", job_id, e)
             emit(
                 job_id=job_id,
                 event_type="LOG",

@@ -1,6 +1,9 @@
 import json
 from app.core.database import redis_client, SessionLocal
+from app.core.logger import get_logger
 from app.models import AuditEvent
+
+logger = get_logger(__name__)
 
 
 def emit(
@@ -13,6 +16,13 @@ def emit(
 ):
     event_data = data or {}
     event_id = 0
+
+    # ── Always log to console + file, regardless of Redis/DB outcome ──────────
+    agent_tag = f"[{agent}] " if agent else ""
+    tier_tag  = f" (tier={tier_used})" if tier_used else ""
+    logger.info("[job=%s] %s%s%s%s", job_id, agent_tag, event_type, tier_tag,
+                f" - {message}" if message else "")
+
     try:
         event_id = redis_client.incr(f"events:{job_id}:seq")
         key = f"events:{job_id}"
@@ -26,8 +36,9 @@ def emit(
         }
         redis_client.rpush(key, json.dumps(event))
         redis_client.expire(key, 3600)  # default TTL of 1 hour
+
     except Exception as r_err:
-        print(f"Warning: Redis event stream push failed: {r_err}")
+        logger.warning("Redis event stream push failed: %s", r_err)
 
     # Dual-write to PostgreSQL for permanent audit retention
     try:
@@ -45,7 +56,7 @@ def emit(
         db.commit()
         db.close()
     except Exception as db_err:
-        print(f"Warning: Failed to persist audit event to DB: {db_err}")
+        logger.warning("Failed to persist audit event to DB: %s", db_err)
 
 
 def get_events_since(job_id: str, since: int = 0) -> list[dict]:
@@ -55,7 +66,7 @@ def get_events_since(job_id: str, since: int = 0) -> list[dict]:
         if raw:
             return [json.loads(r) for r in raw]
     except Exception as r_err:
-        print(f"Warning: Redis get_events_since failed: {r_err}")
+        logger.warning("Redis get_events_since failed: %s", r_err)
 
     # 2. Fallback to PostgreSQL audit_events if Redis is empty or expired
     try:
@@ -80,6 +91,6 @@ def get_events_since(job_id: str, since: int = 0) -> list[dict]:
         db.close()
         return events
     except Exception as db_err:
-        print(f"Warning: PostgreSQL get_events_since fallback failed: {db_err}")
+        logger.warning("PostgreSQL get_events_since fallback failed: %s", db_err)
         return []
 

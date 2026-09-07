@@ -3,7 +3,7 @@ from qdrant_client.http import models
 
 from app.core.config import settings
 
-qdrant_client = QdrantClient(url=settings.QDRANT_URL)
+qdrant_client = QdrantClient(url=settings.QDRANT_URL, check_compatibility=False)
 
 
 def init_qdrant():

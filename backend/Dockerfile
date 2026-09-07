@@ -10,9 +10,15 @@ WORKDIR /app
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy and install python dependencies
-COPY requirements.txt pyproject.toml ./
-RUN uv pip install --system -r requirements.txt
+# Configure uv to install into system Python environment and compile bytecode
+ENV UV_PROJECT_ENVIRONMENT="/usr/local"
+ENV UV_COMPILE_BYTECODE=1
+
+# Copy dependency specifications and lockfile
+COPY pyproject.toml uv.lock requirements.txt ./
+
+# Synchronize dependencies directly from the lockfile into system Python
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy the application code
 COPY . .

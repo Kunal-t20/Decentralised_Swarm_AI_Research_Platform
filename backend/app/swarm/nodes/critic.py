@@ -3,8 +3,11 @@ import json
 import concurrent.futures
 from app.services.openrouter_client import llm_client
 from app.services.events_service import emit
+from app.core.logger import get_logger
 from app.swarm.prompts import CRITIC_SYSTEM_PROMPT, CRITIC_USER_PROMPT_TEMPLATE
 from app.swarm.state import SwarmState
+
+logger = get_logger(__name__)
 
 def clean_and_parse_json(text: str) -> dict:
     """Clean and parse JSON response from LLMs, stripping reasoning and code blocks."""
@@ -38,7 +41,7 @@ def call_critic_model(tier: int, messages: list, cache_bust: str = "") -> dict:
             "verdict": parsed.get("verdict", "reject")
         }
     except Exception as e:
-        print(f"Critic Tier {tier} failed: {e}")
+        logger.error("Critic Tier %s failed: %s", tier, e)
         return {
             "success": False,
             "tier": tier,

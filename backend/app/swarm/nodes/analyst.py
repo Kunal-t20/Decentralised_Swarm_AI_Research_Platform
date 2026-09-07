@@ -2,9 +2,12 @@ from qdrant_client.http import models as qdrant_models
 from app.services.qdrant_service import qdrant_client
 from app.services.openrouter_client import llm_client
 from app.services.events_service import emit
+from app.core.logger import get_logger
 from app.swarm.prompts import ANALYST_SYSTEM_PROMPT, ANALYST_USER_PROMPT_TEMPLATE
 from app.swarm.state import SwarmState
 from app.swarm.nodes.researcher import get_embedding
+
+logger = get_logger(__name__)
 
 
 def _build_sources_list(sources: list) -> str:

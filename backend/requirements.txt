@@ -4,6 +4,8 @@ fastapi
 uvicorn[standard]
 langchain
 langgraph
+langgraph-checkpoint-postgres>=3.1.0
+langgraph-checkpoint-sqlite>=3.1.0
 
 sqlalchemy
 alembic

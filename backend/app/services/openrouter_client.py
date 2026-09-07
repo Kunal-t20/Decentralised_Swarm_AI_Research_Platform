@@ -4,6 +4,9 @@ import time
 import httpx
 from app.core.config import settings
 from app.core.database import redis_client
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 MODEL_MAPPING = {
     "researcher": {
@@ -18,7 +21,7 @@ MODEL_MAPPING = {
     },
     "critic": {
         1: "openai/gpt-oss-120b",
-        2: "nvidia/nemotron-3-nano-30b-a3b:free",
+        2: "nvidia/nemotron-3-nano-30b-a3b",
         3: "phi4:14b",
     },
 }
@@ -41,7 +44,7 @@ class LLMClient:
             if cached:
                 return cached
         except Exception as e:
-            print(f"Warning: Redis prompt cache read failed: {e}")
+            logger.warning("Redis prompt cache read failed: %s", e)
         return None
 
     def _set_prompt_cache(self, messages: list, model: str, response: str, cache_bust: str = "") -> None:
@@ -52,7 +55,7 @@ class LLMClient:
         try:
             redis_client.setex(cache_key, 7200, response)
         except Exception as e:
-            print(f"Warning: Redis prompt cache write failed: {e}")
+            logger.warning("Redis prompt cache write failed: %s", e)
 
     def _get_circuit_breaker_state(self, agent: str, tier: int) -> str:
         """Get circuit breaker state (CLOSED, OPEN, HALF-OPEN)."""
@@ -69,7 +72,7 @@ class LLMClient:
                     return "HALF-OPEN"
             return state
         except Exception as e:
-            print(f"Warning: Redis circuit breaker read failed: {e}")
+            logger.warning("Redis circuit breaker read failed: %s", e)
             return "CLOSED"
 
     def _record_success(self, agent: str, tier: int) -> None:
@@ -83,7 +86,7 @@ class LLMClient:
             redis_client.set(failures_key, 0)
             redis_client.delete(open_until_key)
         except Exception as e:
-            print(f"Warning: Redis circuit breaker success record failed: {e}")
+            logger.warning("Redis circuit breaker success record failed: %s", e)
 
     def _record_failure(self, agent: str, tier: int) -> None:
         """Record a failure and trip circuit if consecutive failures >= 3."""
@@ -96,9 +99,9 @@ class LLMClient:
             if failures >= 3:
                 redis_client.set(state_key, "OPEN")
                 redis_client.set(open_until_key, time.time() + 60.0) # 60 seconds cooling off
-                print(f"CRITICAL: Circuit breaker for {agent} Tier {tier} tripped to OPEN.")
+                logger.critical("Circuit breaker for %s Tier %s tripped to OPEN.", agent, tier)
         except Exception as e:
-            print(f"Warning: Redis circuit breaker failure record failed: {e}")
+            logger.warning("Redis circuit breaker failure record failed: %s", e)
 
     def call_llm(self, agent: str, messages: list, temperature: float = 0.7, cache_bust: str = "") -> dict:
         """
@@ -115,13 +118,13 @@ class LLMClient:
             # Check Circuit Breaker
             cb_state = self._get_circuit_breaker_state(agent, tier)
             if cb_state == "OPEN":
-                print(f"Circuit breaker OPEN for {agent} Tier {tier}. Skipping to next tier.")
+                logger.warning("Circuit breaker OPEN for %s Tier %s. Skipping to next tier.", agent, tier)
                 continue
 
             # Check prompt cache first
             cached_response = self._get_prompt_cache(messages, model, cache_bust=cache_bust)
             if cached_response:
-                print(f"Cache hit for model {model}")
+                logger.debug("Cache HIT  model=%s", model)
                 return {"content": cached_response, "model": model, "tier_used": tier}
 
             # Attempt API call
@@ -131,7 +134,7 @@ class LLMClient:
                 self._set_prompt_cache(messages, model, content, cache_bust=cache_bust)
                 return {"content": content, "model": model, "tier_used": tier}
             except Exception as e:
-                print(f"Error calling {agent} Tier {tier} ({model}): {e}")
+                logger.error("Error calling %s Tier %s (%s): %s", agent, tier, model, e)
                 self._record_failure(agent, tier)
                 # Continue loop to next tier
 
@@ -156,7 +159,7 @@ class LLMClient:
 
         cached_response = self._get_prompt_cache(messages, model, cache_bust=cache_bust)
         if cached_response:
-            print(f"Cache hit for model {model}")
+            logger.debug("Cache HIT  model=%s", model)
             return {"content": cached_response, "model": model, "tier_used": tier}
 
         try:
@@ -165,7 +168,7 @@ class LLMClient:
             self._set_prompt_cache(messages, model, content, cache_bust=cache_bust)
             return {"content": content, "model": model, "tier_used": tier}
         except Exception as e:
-            print(f"Error calling {agent} Tier {tier} ({model}): {e}")
+            logger.error("Error calling %s Tier %s (%s): %s", agent, tier, model, e)
             self._record_failure(agent, tier)
             raise e
 

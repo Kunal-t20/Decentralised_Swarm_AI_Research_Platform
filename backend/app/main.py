@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,10 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import health, auth, research
 from app.core.config import settings
+from app.core.logger import get_logger          # ← initialises file + console logging
 from app.services.qdrant_service import init_qdrant
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
+
 async def lifespan(app: FastAPI):
     # Startup logic
     init_qdrant()

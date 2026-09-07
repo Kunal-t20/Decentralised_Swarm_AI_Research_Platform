@@ -61,7 +61,7 @@ services:
       - qdrant_data:/qdrant/storage
 
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:6333/health || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -78,6 +78,11 @@ services:
 
     env_file:
       - ./backend/.env
+
+    environment:
+      DATABASE_URL: postgresql://swarm:swarm@postgres:5432/research_db
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
 
     ports:
       - "8000:8000"
@@ -111,6 +116,11 @@ services:
 
     env_file:
       - ./backend/.env
+
+    environment:
+      DATABASE_URL: postgresql://swarm:swarm@postgres:5432/research_db
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
 
     depends_on:
       postgres:

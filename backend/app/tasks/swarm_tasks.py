@@ -1,8 +1,11 @@
 from app.core.celery_app import celery_app
+from app.core.logger import get_logger
 from app.swarm.graph import swarm_graph
 from app.core.database import SessionLocal
 from app.models import User, ResearchJob, ResearchReport, FeedbackLog, AuditEvent
 from app.services.events_service import emit
+
+logger = get_logger(__name__)
 
 
 @celery_app.task(bind=True, name="app.tasks.swarm_tasks.run_research_swarm", rate_limit="10/m")
@@ -20,7 +23,7 @@ def run_research_swarm(self, job_id: str, topic: str):
         if not job:
             raise ValueError(f"Research job with id {job_id} not found in database.")
         if job.status not in ["QUEUED", "pending"]:
-            print(f"Job {job_id} is already in state '{job.status}'. Skipping duplicate execution.")
+            logger.warning("[job=%s] Skipping duplicate - already in state '%s'.", job_id, job.status)
             return
         job.status = "RUNNING"
         db.commit()
@@ -40,6 +43,7 @@ def run_research_swarm(self, job_id: str, topic: str):
             "draft_history": [],
         }
         config = {"configurable": {"thread_id": job_id}}
+        logger.info("[job=%s] Invoking swarm graph for topic: %s", job_id, topic)
         final_state = swarm_graph.invoke(initial_state, config=config)
 
         # 3. Persist final report
@@ -57,6 +61,7 @@ def run_research_swarm(self, job_id: str, topic: str):
             final_content = final_state.get("analyst_draft", "")
             final_scores_to_save = critic_scores
             done_message = "Research job successfully completed. Quality criteria met."
+            logger.info("[job=%s] COMPLETED - all critic scores >= 7.", job_id)
         else:
             job.status = "COMPLETED_WITH_WARNING"
             if draft_history:
@@ -107,7 +112,7 @@ def run_research_swarm(self, job_id: str, topic: str):
                 job.status = "FAILED"
                 db.commit()
         except Exception as db_err:
-            print(f"Error updating job status to failed: {db_err}")
+            logger.error("[job=%s] Error updating job status to failed: %s", job_id, db_err)
             db.rollback()
 
         emit(
