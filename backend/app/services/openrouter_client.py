@@ -1,3 +1,15 @@
+"""
+LLM Routing & Chat Completion Gateway.
+
+Handles generative multi-tier LLM routing across Groq, OpenRouter, and Ollama
+for agents that require text generation (Analyst, Critic).
+
+ARCHITECTURAL NOTE:
+The Researcher agent does NOT use generative LLMs. It operates strictly via
+web search, content extraction, chunking, and embedding generation (handled in
+app/services/embedding_service.py). MODEL_MAPPING contains ONLY generative LLM agents.
+"""
+
 import hashlib
 import json
 import time
@@ -8,21 +20,17 @@ from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Generative LLM Routing Table (Analyst and Critic only)
 MODEL_MAPPING = {
-    "researcher": {
-        1: "openai/gpt-oss-120b",
-        2: "openrouter/free",
-        3: "llama3.2:3b",
-    },
     "analyst": {
         1: "openai/gpt-oss-120b",
         2: "openrouter/free",
-        3: "qwen2.5:7b",
+        3: "qwen3:4b",
     },
     "critic": {
         1: "openai/gpt-oss-120b",
         2: "nvidia/nemotron-3-nano-30b-a3b",
-        3: "phi4:14b",
+        3: "qwen3:4b",
     },
 }
 
@@ -108,8 +116,17 @@ class LLMClient:
         Executes chat completion routing across Tiers 1-3 with prompt caching and circuit breakers.
         Returns a dict: {"content": str, "model": str, "tier_used": int}
         """
+        if agent == "researcher":
+            raise ValueError(
+                "The 'researcher' agent does not use generative LLMs. "
+                "Researcher uses embedding models for retrieval only. "
+                "Generative LLM routing is restricted to: " + ", ".join(MODEL_MAPPING.keys())
+            )
         if agent not in MODEL_MAPPING:
-            raise ValueError(f"Unknown agent type: {agent}")
+            raise ValueError(
+                f"Unknown generative agent type: '{agent}'. "
+                f"Allowed generative agents: {list(MODEL_MAPPING.keys())}"
+            )
 
         # Try Tiers 1 to 3 sequentially
         for tier in [1, 2, 3]:
@@ -146,8 +163,17 @@ class LLMClient:
         cache_bust: mixed into the cache key; pass str(loop_count) for critic
         calls to prevent stale cache hits from stalling iterative loops.
         """
+        if agent == "researcher":
+            raise ValueError(
+                "The 'researcher' agent does not use generative LLMs. "
+                "Researcher uses embedding models for retrieval only. "
+                "Generative LLM routing is restricted to: " + ", ".join(MODEL_MAPPING.keys())
+            )
         if agent not in MODEL_MAPPING:
-            raise ValueError(f"Unknown agent type: {agent}")
+            raise ValueError(
+                f"Unknown generative agent type: '{agent}'. "
+                f"Allowed generative agents: {list(MODEL_MAPPING.keys())}"
+            )
         if tier not in MODEL_MAPPING[agent]:
             raise ValueError(f"Unknown tier {tier} for agent {agent}")
 
@@ -190,7 +216,10 @@ class LLMClient:
                 "temperature": temperature,
             }
 
-            with httpx.Client(timeout=self.timeout) as client:
+            # Use the timeout configured in ``settings`` if available; otherwise fall back
+            # to the client‑level timeout (30 s). This makes the timeout configurable via ``.env``.
+            timeout = getattr(settings, "OLLAMA_TIMEOUT", self.timeout)
+            with httpx.Client(timeout=timeout) as client:
                 response = client.post(url, headers=headers, json=payload)
                 if response.status_code != 200:
                     raise httpx.HTTPStatusError(
@@ -259,3 +288,5 @@ class LLMClient:
         raise ValueError(f"Unsupported tier: {tier}")
 
 llm_client = LLMClient()
+
+

@@ -11,20 +11,22 @@ def test_phase1_lazy_swarm_graph():
     assert isinstance(swarm_graph, LazySwarmGraph)
 
 def test_phase1_llm_model_mapping():
-    """Verify Groq, OpenRouter, and Ollama tier model mappings."""
+    """Verify Groq, OpenRouter, and Ollama tier model mappings for generative agents."""
+    # Ensure researcher is NOT in MODEL_MAPPING (researcher uses embeddings, not generative LLMs)
+    assert "researcher" not in MODEL_MAPPING
+    assert set(MODEL_MAPPING.keys()) == {"analyst", "critic"}
+
     # Tier 1 Groq
     assert MODEL_MAPPING["analyst"][1] == "openai/gpt-oss-120b"
     assert MODEL_MAPPING["critic"][1] == "openai/gpt-oss-120b"
 
     # Tier 2 OpenRouter
     assert MODEL_MAPPING["analyst"][2] == "openrouter/free"
-    assert MODEL_MAPPING["critic"][2] == "nvidia/nemotron-3-nano-30b-a3b:free"
-
+    assert MODEL_MAPPING["critic"][2] == "nvidia/nemotron-3-nano-30b-a3b"
 
     # Tier 3 Ollama
-    assert MODEL_MAPPING["researcher"][3] == "llama3.2:3b"
-    assert MODEL_MAPPING["analyst"][3] == "qwen2.5:7b"
-    assert MODEL_MAPPING["critic"][3] == "phi4:14b"
+    assert MODEL_MAPPING["analyst"][3] == "qwen3:4b"
+    assert MODEL_MAPPING["critic"][3] == "qwen3:4b"
 
 def test_phase1_llm_call_accepts_cache_bust():
     """Verify call_llm accepts cache_bust argument and queries cache with bust string."""
@@ -48,7 +50,7 @@ def test_phase1_groq_execution():
          patch.object(llm_client, "_get_prompt_cache", return_value=None), \
          patch("httpx.Client.post", return_value=mock_res) as mock_post:
 
-        res = llm_client.call_llm("researcher", messages)
+        res = llm_client.call_llm("analyst", messages)
         assert res["content"] == "Groq response"
         assert res["tier_used"] == 1
         assert res["model"] == "openai/gpt-oss-120b"
@@ -114,3 +116,4 @@ def test_phase1_completed_with_warning_and_best_draft_selection():
         
         assert added_report is not None
         assert added_report.content == "Draft iteration 2 (Best quality draft)"
+

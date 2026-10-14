@@ -1,10 +1,25 @@
-import hashlib
-import random
+"""
+Researcher Agent Node.
+
+Responsibilities:
+1. Web search via DuckDuckGo (search_service)
+2. Content extraction & processing
+3. Chunking source text
+4. Vector embedding generation (embedding_service)
+5. Vector indexing into Qdrant (qdrant_service)
+6. Compiling fallback research summary notes
+
+ARCHITECTURAL PRINCIPLE:
+The Researcher agent does NOT use any generative LLM or generative LLM routing gateway.
+It generates vector embeddings exclusively for semantic search and Qdrant retrieval.
+Generative text synthesis is deferred downstream to the Analyst agent.
+"""
+
 import uuid
-import httpx
 from qdrant_client.http import models as qdrant_models
 from app.core.config import settings
 from app.core.logger import get_logger
+from app.services.embedding_service import get_embedding as _generate_embedding
 from app.services.qdrant_service import qdrant_client
 from app.services.search_service import search_service
 from app.services.events_service import emit
@@ -22,32 +37,13 @@ def chunk_text(text: str, max_words: int = 400) -> list[str]:
 
 def get_embedding(text: str) -> list[float]:
     """
-    Get 768-dimensional embedding from Ollama nomic-embed-text.
-    Falls back to a deterministic mock vector if Ollama is unreachable/disabled.
-    """
-    if settings.OLLAMA_BASE_URL:
-        try:
-            url = f"{settings.OLLAMA_BASE_URL}/api/embeddings"
-            response = httpx.post(
-                url,
-                json={"model": "nomic-embed-text", "prompt": text},
-                timeout=5.0
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if "embedding" in data:
-                    return data["embedding"]
-        except Exception as e:
-            logger.warning("Ollama embedding request failed: %s. Using deterministic mock.", e)
+    Generate 768-dimensional text embedding for vector indexing.
 
-    # Fallback deterministic L2-normalized vector embedding of size 768
-    import math
-    hasher = hashlib.sha256(text.lower().strip().encode("utf-8"))
-    seed_int = int(hasher.hexdigest()[:8], 16)
-    rng = random.Random(seed_int)
-    raw_vec = [rng.gauss(0, 1) for _ in range(768)]
-    norm = math.sqrt(sum(x * x for x in raw_vec)) or 1.0
-    return [x / norm for x in raw_vec]
+    NOTE: Embeddings are purely numerical vector representations for semantic
+    search (Qdrant) and are completely distinct from generative LLM text routing.
+    Researcher does NOT use generative LLMs.
+    """
+    return _generate_embedding(text, base_url=settings.OLLAMA_BASE_URL)
 
 
 def researcher_node(state: SwarmState) -> dict:

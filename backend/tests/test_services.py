@@ -68,7 +68,7 @@ def test_llm_cache_hit():
     """Test that call_llm returns cached result if found in Redis."""
     messages = [{"role": "user", "content": "Hello"}]
     with patch.object(redis_client, "get", return_value="Cached response") as mock_get:
-        response = llm_client.call_llm("researcher", messages)
+        response = llm_client.call_llm("analyst", messages)
         assert response["content"] == "Cached response"
         assert response["tier_used"] == 1
         # Called twice: once for cb state check, once for prompt cache check
@@ -85,13 +85,13 @@ def test_llm_circuit_breaker_trips():
          
         # Expecting error since all tiers will fail
         with pytest.raises(RuntimeError):
-            llm_client.call_llm("researcher", messages)
+            llm_client.call_llm("analyst", messages)
             
         # Verify that incr was called to increment failure count
         assert mock_incr.call_count > 0
         # Verify that circuit state was set (tripped to OPEN)
-        mock_set.assert_any_call("cb:state:researcher:1", "OPEN")
-        mock_set.assert_any_call("cb:state:researcher:2", "OPEN")
+        mock_set.assert_any_call("cb:state:analyst:1", "OPEN")
+        mock_set.assert_any_call("cb:state:analyst:2", "OPEN")
 
 def test_llm_circuit_breaker_skips_open_circuits():
     """Test that call_llm skips tiers that have an OPEN circuit breaker."""
@@ -99,9 +99,9 @@ def test_llm_circuit_breaker_skips_open_circuits():
     
     # Mock states: Tier 1 OPEN, Tier 2 CLOSED, Tier 3 disabled
     def mock_redis_get(key):
-        if key == "cb:state:researcher:1":
+        if key == "cb:state:analyst:1":
             return "OPEN"
-        elif key == "cb:state:researcher:2":
+        elif key == "cb:state:analyst:2":
             return "CLOSED"
         return None
         
@@ -115,10 +115,10 @@ def test_llm_circuit_breaker_skips_open_circuits():
          patch("httpx.Client.post", return_value=mock_response) as mock_post, \
          patch.object(redis_client, "setex") as mock_setex:
          
-        response = llm_client.call_llm("researcher", messages)
+        response = llm_client.call_llm("analyst", messages)
         assert response["content"] == "Tier 2 success"
         assert response["tier_used"] == 2
-        # Verify post payload called with Tier 2 model: google/gemma-4-26b-a4b-it:free
+        # Verify post payload called with Tier 2 model: openrouter/free
         called_args, called_kwargs = mock_post.call_args
         assert called_kwargs["json"]["model"] == "openrouter/free"
 
